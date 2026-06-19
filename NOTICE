@@ -1,0 +1,31 @@
+MOBIUS INFINITY / ERO — Entitlement–Reflection Orchestrator
+Copyright (C) 2025-2026 MOBIUS LLC
+Author of record: Taiko Toeda. Rights holder / licensing authority: MOBIUS LLC.
+
+Licensed under AGPL-3.0-or-later (see LICENSE). Repository-wide licensing and
+rights-management terms — including the documentation CC BY-NC-SA layer and the
+commercial-licensing option — are in LICENSE_NOTICE.md. Patent status is in
+PATENTS.md.
+
+------------------------------------------------------------------------------
+Composed components (separate works, used as external dependencies)
+------------------------------------------------------------------------------
+ERO is a thin orchestration layer. It does not vendor or modify the systems it
+composes; it consumes their public interfaces. Both are AGPL-3.0-or-later works
+by MOBIUS LLC and must be obtained separately:
+
+  * MOBIUS MMV  — answer-entitlement routing runtime
+                  https://github.com/mobius-style/mmv
+  * MOBIUS RQA  — reflective questioning adapter
+                  https://github.com/mobius-style/rqa
+
+Locate them at runtime via the MMV_ROOT / RQA_ROOT environment variables (or as
+sibling checkouts). Their copyright, license, and NOTICE terms are preserved in
+their own repositories and apply to those works.
+
+------------------------------------------------------------------------------
+Documentation / paper
+------------------------------------------------------------------------------
+paper/ (the "Depth, Not Restraint" manuscript and drafts) is documentation,
+licensed CC BY-NC-SA 4.0 per its own front matter and LICENSE_NOTICE.md §4 —
+NOT under the AGPL that covers the code.

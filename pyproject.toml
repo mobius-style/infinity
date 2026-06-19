@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mobius-infinity"
+version = "0.16"
+description = "MOBIUS INFINITY / ERO — governed answer-entitlement (MMV) + reflective questioning (RQA), with an OpenAI-compatible API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "Taiko Toeda", email = "toeda.t@gmail.com" }]
+keywords = ["llm", "governance", "clarification", "answer-entitlement", "mobius", "openai-compatible"]
+
+# ERO's core (orchestration + OpenAI mapping) is pure stdlib. The MMV and RQA
+# backends are separate repos located via MMV_ROOT / RQA_ROOT (or as siblings);
+# install their own requirements. Serving the HTTP API needs the `serve` extra.
+dependencies = []
+
+[project.optional-dependencies]
+serve = ["fastapi>=0.110", "uvicorn>=0.29"]
+
+[project.scripts]
+mobius-infinity = "ero.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/mobius-style"
+Repository = "https://github.com/mobius-style/infinity"
+
+[tool.setuptools]
+packages = ["ero"]

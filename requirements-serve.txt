@@ -1,0 +1,5 @@
+# Optional deps for the OpenAI-compatible server (ero/openai_api.py).
+# The ERO package itself needs none of these — they are imported lazily and
+# only when you actually serve. Install with:  pip install -r requirements-serve.txt
+fastapi>=0.110
+uvicorn>=0.29

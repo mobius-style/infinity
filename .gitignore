@@ -1,0 +1,25 @@
+# --- python ---
+__pycache__/
+*.pyc
+
+# --- runtime state / user data (never publish) ---
+data/
+logs/
+state/
+*.db
+*.faiss
+
+# --- disposable run artifacts ---
+sandbox/
+sandbox*/
+*.log
+
+# --- external dependencies, NOT part of this repo ---
+# MMV / RQA are separate public repos (mobius-style/mmv, mobius-style/rqa),
+# consumed via MMV_ROOT / RQA_ROOT. The local vendored fork is never published.
+vendor/
+
+# --- internal working docs (not for publication) ---
+# HANDOFF.md is a cross-session working note (references local memory paths,
+# backups, and internal process); keep it local, do not publish.
+HANDOFF.md
