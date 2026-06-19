@@ -159,3 +159,12 @@ commercial-license option, and rights administration: [LICENSE_NOTICE.md](LICENS
 Composed dependencies (MMV, RQA) and attribution: [NOTICE](NOTICE). The
 underlying methods are patent pending (7 filings); the AGPL §11 grant and its
 scope: [PATENTS.md](PATENTS.md).
+
+## Related — the Möbius program
+
+Part of the [MOBIUS](https://github.com/mobius-style) program — local-first, AGPL:
+
+- [mmv](https://github.com/mobius-style/mmv) — answer-entitlement runtime: decides *whether* answering is warranted
+- [rqa](https://github.com/mobius-style/rqa) — reflective questioning adapter: deepens *the question* when it is not
+- [rcgov](https://github.com/mobius-style/rcgov) — reflective context governor: governs *what a model may read*
+- [infinity](https://github.com/mobius-style/infinity) — composite capstone (MMV × RQA) with an OpenAI-compatible API
