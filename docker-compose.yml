@@ -1,0 +1,47 @@
+# Full local stack: Ollama (model host) + MOBIUS INFINITY (OpenAI-compatible API).
+#   docker compose up --build
+# First run pulls the model (one-shot `model-pull` service) — this is large.
+# Then point any OpenAI client at http://localhost:8000/v1
+services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  model-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: ["ollama", "pull", "${OLLAMA_MODEL:-gemma4:12b}"]
+    restart: "no"
+
+  infinity:
+    build: .
+    depends_on:
+      model-pull:
+        condition: service_completed_successfully
+    environment:
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma4:12b}
+      - ERO_API_KEY=${ERO_API_KEY:-}
+    ports:
+      - "8000:8000"
+    command:
+      - mobius-infinity
+      - serve
+      - --host=0.0.0.0
+      - --port=8000
+      - --ollama-url=http://ollama:11434
+      - --model=${OLLAMA_MODEL:-gemma4:12b}
+
+volumes:
+  ollama:

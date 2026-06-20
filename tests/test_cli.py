@@ -114,7 +114,7 @@ def test_ollama_tags_returns_none_when_down():
 
 
 def test_version_string():
-    assert __version__ == "0.16"
+    assert __version__ == "1.0.0-rc1"
 
 
 # --- plain-python runner ---------------------------------------------------

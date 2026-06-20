@@ -17,29 +17,52 @@ Spec: [SPEC_v0_2.md](SPEC_v0_2.md) (current authority; supersedes v0.1).
 
 ## Quickstart — use it like a local LLM
 
-Prereqs: [Ollama](https://ollama.com) running with the base model, and the two
-sibling repos present (set `MMV_ROOT` / `RQA_ROOT`, or clone them next to this
-one). Then:
+Prereq: [Ollama](https://ollama.com) installed. Then one of:
 
+**Turnkey (clones deps, installs, pulls the model, preflights):**
+```bash
+make install      # = ./bootstrap.sh  (clones mmv+rqa into ./deps, installs, pulls gemma4:12b)
+make serve        # OpenAI-compatible API, fully local, no key
+```
+
+**Full stack in Docker (Ollama + ERO together):**
+```bash
+docker compose up --build      # first run pulls the model (large); then:
+#   -> http://localhost:8000/v1
+```
+
+**Manual:**
 ```bash
 ollama pull gemma4:12b
 pip install -e ".[serve]"          # installs the `mobius-infinity` command + FastAPI
-
+export MMV_ROOT=/path/to/mmv RQA_ROOT=/path/to/rqa   # the two sibling repos
 mobius-infinity preflight          # checks Ollama / model / repos before you start
-mobius-infinity serve              # OpenAI-compatible API, profile=fast (~12s, no key)
-#   -> http://127.0.0.1:8000/v1   point any OpenAI client (OpenWebUI, etc.) here
+mobius-infinity serve              # -> http://127.0.0.1:8000/v1  (point any OpenAI client here)
 ```
 
-`serve` defaults to **`--profile fast`** — fully local, no cloud key, ~12s/turn.
+Production exposure: set an API key (`--api-key` / `$ERO_API_KEY` → requires
+`Authorization: Bearer …` on `/v1/*`) and a `--timeout`; see [SECURITY.md](SECURITY.md).
+
+`serve` defaults to **`--profile fast`** — fully local, no cloud key (ask route
+~15–20s on a local 12B, masked by streaming; see the latency note below).
 The reflection tiers (latency-measured on a local gemma4:12b host; the local
 evaluator is the dominant cost):
 
 | `--profile` | budget | judge | latency | notes |
 |-------------|--------|-------|--------:|-------|
-| **fast** (default) | k3/d1 | none | ~12s | interactive, fully local |
-| balanced | k4/d2 | none | ~27s | more candidates, local |
-| quality | k6/d3 | local | ~157s | paper-style selection, slow |
-| cloud | k6/d3 | Groq | fast | paper-faithful; needs `GROQ_API_KEY` |
+| turbo | k1/d1 | none | ~15–20s | single candidate, no selection |
+| **fast** (default) | k3/d1 | none | ~15–20s | interactive, fully local |
+| balanced | k4/d2 | none | ~25s | more candidates, local |
+| quality | k6/d3 | local | ~150s | paper-style selection, slow |
+| cloud | k6/d3 | Groq | ~30s | paper-faithful; needs `GROQ_API_KEY` |
+
+**About latency (honest).** On a local `gemma4:12b`, the ask route runs RQA's
+multi-step reflection, so it takes **~15–20s** — and that floor is set by the
+model's tokens/sec and the number of internal LLM calls, **not** by `k`,
+`num_ctx`, or the evaluator (measured: tuning those barely moves it). So:
+- the wait is **masked** by responsive streaming (immediate role chunk + keepalive heartbeats + typewriter) — it feels active, not frozen;
+- the clarifying question **cannot** token-stream earlier (it's chosen at the end of a selection pipeline);
+- for genuinely lower latency, use a **smaller/faster `--model`**, a **faster endpoint** (`--ollama-url` to vLLM/a GPU host, or `--cloud`), or better hardware.
 
 `--local` / `--cloud` are aliases for `fast` / `cloud`. Multi-turn history is
 honored by default (the message array is threaded into MMV's session);
@@ -122,7 +145,7 @@ serve.
 **Streaming (`stream: true`)** is built for perceived responsiveness: the
 assistant role chunk is sent immediately, SSE keepalive heartbeats flow every 2s
 while the ask path reflects, then the text streams incrementally (typewriter).
-This makes the ~12s ask wait *feel* active rather than frozen — it masks, not
+This makes the ~15–20s ask wait *feel* active rather than frozen — it masks, not
 reduces, the latency (the clarifying question is produced by a selection
 pipeline, so it cannot token-stream earlier).
 

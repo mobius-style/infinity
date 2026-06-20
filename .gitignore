@@ -2,6 +2,11 @@
 __pycache__/
 *.pyc
 
+# --- build artifacts ---
+dist/
+build/
+*.egg-info/
+
 # --- runtime state / user data (never publish) ---
 data/
 logs/
@@ -16,8 +21,10 @@ sandbox*/
 
 # --- external dependencies, NOT part of this repo ---
 # MMV / RQA are separate public repos (mobius-style/mmv, mobius-style/rqa),
-# consumed via MMV_ROOT / RQA_ROOT. The local vendored fork is never published.
+# consumed via MMV_ROOT / RQA_ROOT. The local vendored fork is never published;
+# `deps/` is where bootstrap.sh clones them.
 vendor/
+deps/
 
 # --- internal working docs (not for publication) ---
 # HANDOFF.md is a cross-session working note (references local memory paths,

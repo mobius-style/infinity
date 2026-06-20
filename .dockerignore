@@ -1,0 +1,17 @@
+.git
+deps/
+vendor/
+sandbox*/
+data/
+__pycache__/
+*.pyc
+*.db
+*.faiss
+*.log
+dist/
+build/
+*.egg-info/
+HANDOFF.md
+paper/
+eval/
+MOBIUS_BACKUPS/

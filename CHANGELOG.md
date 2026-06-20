@@ -3,6 +3,30 @@
 Base model unified on **gemma4:12b** (Qwen shelved). Backups per version under
 `mobius_ai/MOBIUS_BACKUPS/mobius_infinity/`.
 
+## v1.0.0-rc1 (2026-06-20) — product-grade hardening (release candidate)
+Brush-up pass toward a product-grade artifact. RC, not GA: the engineering bar is
+met; real-world validation (PMF) and latency expectations are the GA gate.
+- **Ops hardening**: per-request timeout (504), optional Bearer auth on `/v1/*`
+  (`--api-key` / `$ERO_API_KEY`; healthz stays open), and the server never
+  crashes on a backend error (500 / clean stream end). +tests.
+- **CI**: `.github/workflows/ci.yml` — network-free suite on Python 3.10–3.13 +
+  build/install/import check (validated locally: wheel builds, console entry works).
+- **Turnkey install**: `bootstrap.sh` + `Makefile` (`make install` / `serve` /
+  `test` / `up`) clone mmv+rqa into `deps/`, install, pull the model, preflight;
+  plus `Dockerfile` + `docker-compose.yml` (Ollama + ERO). Verified: a downloader
+  cloning the **public** mmv/rqa and pointing `MMV_ROOT`/`RQA_ROOT` there →
+  `preflight` PASS.
+- **Latency (honest)**: added a `turbo` profile (k1/d1). Measured that local ask
+  latency is **~15–20s and is dominated by the 12B's tokens/sec × RQA's internal
+  LLM calls — NOT by `k`, `num_ctx`, or the evaluator** (tuning them barely
+  moves it). It is masked by responsive streaming; genuine speedups need a
+  smaller/faster `--model`, a faster `--ollama-url` endpoint, `--cloud`, or
+  better hardware. True token-streaming is deferred (backends don't expose
+  tokens through ERO's contracts; the ask question is chosen at pipeline end).
+- **Docs/community**: CONTRIBUTING, SECURITY, issue + PR templates; README
+  turnkey + honest latency section.
+- Tests: 78 network-free, all green.
+
 ## v0.16 (2026-06-19) — reflection profiles (fast default; the 190s fix)
 - **Latency ablation** (host, local gemma4:12b, single prompt, eval on−off at
   fixed budget): the **local 12B evaluator dominates** — quick +50.7s,

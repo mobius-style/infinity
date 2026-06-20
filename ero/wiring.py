@@ -180,14 +180,16 @@ def local_rqa_config(*, generator_model: str = UNIFIED_BASE_MODEL,
                   evaluator_enabled=evaluator_enabled, evaluator_binding=binding)
 
 
-# Reflection profiles — speed/quality tiers, latency-measured 2026-06-19 on a
-# host with local gemma4:12b (single-prompt ablation; evaluator dominates cost):
+# Reflection profiles — speed/quality tiers, latency-measured on a host with
+# local gemma4:12b (single-prompt ablation; the evaluator dominates cost):
+#   turbo     k1/d1, no judge       ~5s    snappiest; single candidate, no select
 #   fast      k3/d1, no judge       ~12s   fully local, interactive (DEFAULT)
 #   balanced  k4/d2, no judge       ~27s   fully local, more candidates
 #   quality   k6/d3, LOCAL judge    ~157s  fully local, paper-style selection
 #   cloud     k6/d3, GROQ judge     fast   paper-faithful; needs GROQ_API_KEY
 # (k/d map to RQA's own quick/standard/full budgets in rqa/__main__.py.)
 _RQA_PROFILES = {
+    "turbo":    dict(k=1, d=1, regen=0, mem=1, evaluator=False, cloud_eval=False),
     "fast":     dict(k=3, d=1, regen=0, mem=2, evaluator=False, cloud_eval=False),
     "balanced": dict(k=4, d=2, regen=1, mem=4, evaluator=False, cloud_eval=False),
     "quality":  dict(k=6, d=3, regen=1, mem=8, evaluator=True,  cloud_eval=False),

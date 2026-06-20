@@ -18,7 +18,7 @@ from pathlib import Path
 
 from .wiring import RQA_PROFILE_NAMES as PROFILE_NAMES
 
-__version__ = "0.16"
+__version__ = "1.0.0-rc1"
 
 _MOBIUS_AI = Path(__file__).resolve().parents[2]
 
@@ -117,6 +117,11 @@ def build_parser():
                     help="model id reported on /v1/models (default: mobius-infinity)")
     sp.add_argument("--no-multiturn", action="store_true",
                     help="route only on the latest user message (ignore history)")
+    sp.add_argument("--api-key", default=os.environ.get("ERO_API_KEY"),
+                    help="require Authorization: Bearer <key> on /v1/* "
+                         "(default: $ERO_API_KEY, else open)")
+    sp.add_argument("--timeout", type=float, default=120.0,
+                    help="per-request timeout in seconds (504 if exceeded)")
 
     sub.add_parser("preflight", parents=[common],
                    help="check Ollama / models / repos")
@@ -156,12 +161,15 @@ def cmd_serve(args):
                               ollama_url=args.ollama_url)
     session_factory = None if args.no_multiturn else new_mmv_session_from_messages
     advertised = args.advertised_model or DEFAULT_MODEL_ID
+    auth = "on (Bearer)" if args.api_key else "off"
     print(f"[mobius-infinity] serving OpenAI-compatible API on "
-          f"http://{args.host}:{args.port}  (model={advertised}, profile={args.profile})")
+          f"http://{args.host}:{args.port}  (model={advertised}, profile={args.profile}, "
+          f"auth={auth}, timeout={args.timeout:g}s)")
     print(f"[mobius-infinity] NOTE: this assistant asks a clarifying question or "
           f"abstains when a request is under-specified — by design.")
     serve(orch, host=args.host, port=args.port, model=advertised,
-          session_factory=session_factory)
+          session_factory=session_factory, api_key=args.api_key,
+          request_timeout=args.timeout)
     return 0
 
 

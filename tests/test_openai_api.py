@@ -18,8 +18,9 @@ from ero import (  # noqa: E402
 )
 from ero.openai_api import (  # noqa: E402
     finish_reason, ero_headers, sse_lines, session_from_payload,
-    content_deltas, stream_chunk_bodies,
+    content_deltas, stream_chunk_bodies, auth_ok, call_handle, timeout_chunk,
 )
+import time as _time  # noqa: E402
 from ero.orchestrator import (  # noqa: E402
     EROResult, BY_ANSWER, BY_ABSTAIN, BY_DEEPEN, BY_UNAVAILABLE,
 )
@@ -249,6 +250,52 @@ def test_handle_chat_forwards_session_state():
     sentinel = {"i_am": "session"}
     handle_chat(orch, _payload("q"), session_state=sentinel, now=_NOW)
     assert orch.seen_session is sentinel
+
+
+# --- ops hardening: auth / timeout / error -------------------------------
+def test_auth_ok_disabled_when_no_key():
+    assert auth_ok(None, None) is True
+    assert auth_ok("anything", "") is True
+
+
+def test_auth_ok_requires_correct_bearer():
+    assert auth_ok("Bearer secret", "secret") is True
+    assert auth_ok("bearer secret", "secret") is True       # case-insensitive scheme
+    assert auth_ok("Bearer wrong", "secret") is False
+    assert auth_ok(None, "secret") is False
+    assert auth_ok("secret", "secret") is False             # missing "Bearer "
+
+
+class _SlowOrch:
+    def handle(self, text, session_state=None):
+        _time.sleep(0.5)
+        return EROResult("answer", "x", BY_ANSWER, "ok", None)
+
+
+class _RaisingOrch:
+    def handle(self, text, session_state=None):
+        raise RuntimeError("boom")
+
+
+def test_handle_chat_timeout_returns_504():
+    status, body, _ = handle_chat(_SlowOrch(), _payload("q"), timeout=0.05, now=_NOW)
+    assert status == 504 and body["error"]["code"] == "timeout"
+
+
+def test_handle_chat_unexpected_error_returns_500():
+    status, body, _ = handle_chat(_RaisingOrch(), _payload("q"), now=_NOW)
+    assert status == 500 and body["error"]["code"] == "internal_error"
+
+
+def test_call_handle_inline_without_timeout():
+    res = call_handle(_answer_orch(), "q", None, None)
+    assert res.text == "Paris."
+
+
+def test_timeout_chunk_shape():
+    c = timeout_chunk("m", "id", 1)
+    assert c["choices"][0]["finish_reason"] == "stop"
+    assert "did not respond" in c["choices"][0]["delta"]["content"]
 
 
 # --- finish_reason / headers helpers ---------------------------------------

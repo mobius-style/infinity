@@ -31,6 +31,7 @@ import asyncio
 import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from typing import Any, Callable, Iterable, Optional
 
 from .orchestrator import BY_ABSTAIN
@@ -39,7 +40,8 @@ OBJECT_CHAT = "chat.completion"
 OBJECT_CHUNK = "chat.completion.chunk"
 OBJECT_MODEL = "model"
 DEFAULT_MODEL_ID = "mobius-infinity"
-HEARTBEAT_SECONDS = 2.0   # SSE keepalive cadence while the ask path reflects
+HEARTBEAT_SECONDS = 2.0      # SSE keepalive cadence while the ask path reflects
+DEFAULT_REQUEST_TIMEOUT = 120.0   # seconds before a stuck backend yields 504
 
 
 # --------------------------------------------------------------------------- #
@@ -174,6 +176,28 @@ def stream_chunk_bodies(result: Any, *, model: str, completion_id: str,
     return out
 
 
+def _terminal_text_chunk(text: str, *, model: str, completion_id: str,
+                         created: int, finish: str) -> dict:
+    """A single streaming chunk carrying `text` and a finish_reason (used for
+    timeout / error ends so streaming clients still get a clean message)."""
+    return {"id": completion_id, "object": OBJECT_CHUNK, "created": created,
+            "model": model,
+            "choices": [{"index": 0, "delta": {"content": text},
+                         "finish_reason": finish}]}
+
+
+def timeout_chunk(model: str, completion_id: str, created: int) -> dict:
+    return _terminal_text_chunk("[the model did not respond in time]",
+                                model=model, completion_id=completion_id,
+                                created=created, finish="stop")
+
+
+def error_chunk(model: str, completion_id: str, created: int) -> dict:
+    return _terminal_text_chunk("[internal error handling the request]",
+                                model=model, completion_id=completion_id,
+                                created=created, finish="stop")
+
+
 def models_body(model_ids: Iterable[str], *, created: int) -> dict:
     return {
         "object": "list",
@@ -189,6 +213,43 @@ def error_body(message: str, *, type_: str = "invalid_request_error",
 
 
 # --------------------------------------------------------------------------- #
+# Auth + bounded execution (ops hardening)
+# --------------------------------------------------------------------------- #
+def auth_ok(auth_header: Optional[str], expected_key: Optional[str]) -> bool:
+    """True if the request is authorized. Auth is OFF when expected_key is falsy
+    (local default); otherwise require `Authorization: Bearer <key>` (constant
+    over the comparison to keep it simple)."""
+    if not expected_key:
+        return True
+    if not auth_header:
+        return False
+    parts = auth_header.split(" ", 1)
+    return len(parts) == 2 and parts[0].lower() == "bearer" and parts[1] == expected_key
+
+
+def unauthorized_body() -> dict:
+    return error_body("missing or invalid API key", code="invalid_api_key")
+
+
+def call_handle(orchestrator: Any, user_input: str, session_state: Any,
+                timeout: Optional[float]) -> Any:
+    """Call orchestrator.handle, bounded by `timeout` seconds. Raises
+    FuturesTimeout if exceeded (the orphaned worker is left to finish on its
+    own — it is not force-killed). timeout=None runs inline (no thread)."""
+    if not timeout:
+        return orchestrator.handle(user_input, session_state)
+    ex = ThreadPoolExecutor(max_workers=1)
+    fut = ex.submit(orchestrator.handle, user_input, session_state)
+    try:
+        res = fut.result(timeout=timeout)
+        ex.shutdown(wait=False)
+        return res
+    except FuturesTimeout:
+        ex.shutdown(wait=False)
+        raise
+
+
+# --------------------------------------------------------------------------- #
 # Pure request handling (non-streaming) — network-free testable
 # --------------------------------------------------------------------------- #
 def handle_chat(
@@ -199,12 +260,13 @@ def handle_chat(
     session_state: Any = None,
     now: Optional[Callable[[], float]] = None,
     id_factory: Optional[Callable[[], str]] = None,
+    timeout: Optional[float] = None,
 ) -> tuple[int, dict, dict]:
     """Map one chat-completions request to (status_code, body, headers).
 
     The injected `orchestrator` only needs `.handle(text, session_state)
-    -> EROResult`. Returns 400 on a malformed request, 503 when ERO reports the
-    backend unavailable, else 200.
+    -> EROResult`. Returns 400 on a malformed request, 504 on timeout, 500 on an
+    unexpected error, 503 when ERO reports the backend unavailable, else 200.
     """
     _now = now or time.time
     created = int(_now())
@@ -216,7 +278,14 @@ def handle_chat(
     except ValueError as exc:
         return 400, error_body(str(exc)), {}
 
-    result = orchestrator.handle(user_input, session_state)
+    try:
+        result = call_handle(orchestrator, user_input, session_state, timeout)
+    except FuturesTimeout:
+        return 504, error_body("the model did not respond in time",
+                               type_="timeout_error", code="timeout"), {}
+    except Exception:  # noqa: BLE001 — never crash the server on a backend bug
+        return 500, error_body("internal error handling the request",
+                               type_="internal_error", code="internal_error"), {}
     headers = ero_headers(result)
 
     if not getattr(result, "available", True):
@@ -258,6 +327,8 @@ def create_app(
     model: str = DEFAULT_MODEL_ID,
     extra_model_ids: Optional[Iterable[str]] = None,
     session_factory: Optional[Callable] = None,
+    api_key: Optional[str] = None,
+    request_timeout: Optional[float] = DEFAULT_REQUEST_TIMEOUT,
     now: Optional[Callable[[], float]] = None,
 ):
     """Build a FastAPI app exposing the OpenAI-compatible surface.
@@ -265,8 +336,10 @@ def create_app(
     `orchestrator` must provide `.handle(text, session_state) -> EROResult`
     (e.g. `ero.wiring.build_orchestrator()`). `session_factory(messages) ->
     session_state` enables multi-turn context (pass
-    `ero.wiring.new_mmv_session_from_messages`); None = single-turn. Requires
-    `fastapi`; install with `pip install -r requirements-serve.txt`.
+    `ero.wiring.new_mmv_session_from_messages`); None = single-turn.
+    `api_key` (if set) requires `Authorization: Bearer <key>` on /v1/* .
+    `request_timeout` bounds each turn (504 / timeout chunk if exceeded).
+    Requires `fastapi`; install with `pip install -r requirements-serve.txt`.
     """
     try:
         from fastapi import FastAPI, Request
@@ -282,15 +355,19 @@ def create_app(
     app = FastAPI(title="MOBIUS INFINITY / ERO", version="1")
 
     @app.get("/healthz")
-    async def healthz():  # noqa: ANN201
+    async def healthz():  # noqa: ANN201 — open (no auth) for liveness probes
         return {"status": "ok", "model": model}
 
     @app.get("/v1/models")
-    async def list_models():  # noqa: ANN201
+    async def list_models(request: Request):  # noqa: ANN201
+        if not auth_ok(request.headers.get("authorization"), api_key):
+            return JSONResponse(unauthorized_body(), status_code=401)
         return models_body(model_ids, created=int(_now()))
 
     @app.post("/v1/chat/completions")
     async def chat_completions(request: Request):  # noqa: ANN201
+        if not auth_ok(request.headers.get("authorization"), api_key):
+            return JSONResponse(unauthorized_body(), status_code=401)
         try:
             payload = await request.json()
         except Exception:
@@ -321,16 +398,28 @@ def create_app(
                 #    shows "responding" instead of a frozen wait.
                 yield _sse(_role_chunk())
                 # 2) run the (blocking) reflection off-thread; heartbeat while it
-                #    works so the ~12s ask path feels alive, not frozen.
+                #    works so the ~12s ask path feels alive, not frozen. Bound by
+                #    request_timeout so a stuck backend cannot hang forever.
                 loop = asyncio.get_event_loop()
                 fut = loop.run_in_executor(None, orchestrator.handle,
                                            user_input, session)
+                waited = 0.0
                 while True:
                     done, _ = await asyncio.wait({fut}, timeout=HEARTBEAT_SECONDS)
                     if done:
                         break
+                    waited += HEARTBEAT_SECONDS
+                    if request_timeout and waited >= request_timeout:
+                        yield _sse(timeout_chunk(req_model, completion_id, created))
+                        yield "data: [DONE]\n\n"
+                        return
                     yield ": keepalive\n\n"          # SSE comment; clients ignore
-                result = fut.result()
+                try:
+                    result = fut.result()
+                except Exception:  # noqa: BLE001 — surface as a clean stream end
+                    yield _sse(error_chunk(req_model, completion_id, created))
+                    yield "data: [DONE]\n\n"
+                    return
                 # 3) stream the produced text incrementally (typewriter), then
                 #    the terminal chunk carrying ERO governance metadata.
                 rest = stream_chunk_bodies(result, model=req_model,
@@ -345,7 +434,8 @@ def create_app(
 
         session = session_from_payload(payload, session_factory)
         status, body, headers = handle_chat(orchestrator, payload, model=model,
-                                            session_state=session, now=_now)
+                                            session_state=session, now=_now,
+                                            timeout=request_timeout)
         return JSONResponse(body, status_code=status, headers=headers)
 
     return app
