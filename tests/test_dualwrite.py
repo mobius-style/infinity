@@ -22,6 +22,18 @@ from ero.provenance import UnifiedMemoryView, USER, ASSISTANT, EXTERNAL  # noqa:
 
 # load the vendored sink by path (the real edited copy)
 _SINK_PATH = ROOT / "vendor" / "mobius_rqa" / "rqa" / "_ero_sink.py"
+if not _SINK_PATH.exists():
+    # dual-write is an experimental Phase-2 feature living in the patched
+    # (vendored) MMV/RQA copies, which are NOT published. Skip cleanly when absent.
+    print("SKIP test_dualwrite: vendored RQA _ero_sink.py not present "
+          "(experimental Phase-2; run locally with vendor/).")
+    if __name__ != "__main__":
+        try:
+            import pytest
+            pytest.skip("vendored patch absent", allow_module_level=True)
+        except ImportError:
+            pass
+    sys.exit(0)
 _spec = importlib.util.spec_from_file_location("ero_sink_vendored", _SINK_PATH)
 sink = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(sink)

@@ -19,6 +19,16 @@ sys.path.insert(0, str(ROOT))
 from ero.unified_store import UnifiedStore  # noqa: E402
 
 _PATH = ROOT / "vendor" / "MOBIUS_MMV" / "src" / "memory" / "_ero_read.py"
+if not _PATH.exists():
+    print("SKIP test_unified_read_mmv: vendored MMV _ero_read.py not present "
+          "(experimental Phase-2; run locally with vendor/).")
+    if __name__ != "__main__":
+        try:
+            import pytest
+            pytest.skip("vendored patch absent", allow_module_level=True)
+        except ImportError:
+            pass
+    sys.exit(0)
 _spec = importlib.util.spec_from_file_location("ero_read_mmv_vendored", _PATH)
 reader = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(reader)

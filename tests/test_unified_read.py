@@ -20,6 +20,16 @@ sys.path.insert(0, str(ROOT))
 from ero.unified_store import UnifiedStore  # noqa: E402
 
 _READ_PATH = ROOT / "vendor" / "mobius_rqa" / "rqa" / "_ero_read.py"
+if not _READ_PATH.exists():
+    print("SKIP test_unified_read: vendored RQA _ero_read.py not present "
+          "(experimental Phase-2; run locally with vendor/).")
+    if __name__ != "__main__":
+        try:
+            import pytest
+            pytest.skip("vendored patch absent", allow_module_level=True)
+        except ImportError:
+            pass
+    sys.exit(0)
 _spec = importlib.util.spec_from_file_location("ero_read_vendored", _READ_PATH)
 reader = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(reader)
