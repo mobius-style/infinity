@@ -81,17 +81,23 @@ edge; `cloud` gets it back at low latency for key-holders.
 
 ## Status
 
-v0.1 vertical slice: routing + framing + audit. The orchestrator imports neither
+v1.0.0-rc1: routing + framing + audit, unified provenance store, output-time
+citation verification, OpenAI-compatible API, and ops hardening (CI, turnkey
+install). The orchestrator imports neither
 MMV nor RQA — it depends on two injected, duck-typed surfaces, so it is fully
 testable without model backends.
 
 ```
-ero/orchestrator.py   # Orchestrator + EROResult (pure routing logic)
-ero/framing.py        # ask-route -> RQA input framing
-ero/audit.py          # append-only audit (memory / JSONL)
-ero/openai_api.py     # OpenAI-compatible HTTP surface (/v1/chat/completions)
-ero/wiring.py         # HOST-ONLY: wires the real MMV + RQA backends (needs Ollama)
-tests/                # network-free acceptance tests (54 across 8 suites)
+ero/orchestrator.py      # Orchestrator + EROResult (pure routing logic)
+ero/framing.py           # ask-route -> RQA input framing
+ero/audit.py             # append-only audit (memory / JSONL)
+ero/unified_store.py     # unified provenance store across MMV + RQA
+ero/provenance.py        # unified provenance ontology
+ero/citation_verifier.py # generalized output-time citation verifier
+ero/openai_api.py        # OpenAI-compatible HTTP surface (/v1/chat/completions)
+ero/wiring.py            # HOST-ONLY: wires the real MMV + RQA backends (needs Ollama)
+tests/                   # network-free acceptance tests (9 suites / 78 tests;
+                         #  vendor-dependent suites skip when vendor/ is absent)
 ```
 
 ## Test
@@ -167,12 +173,15 @@ ero = build_orchestrator(backend=BackendConfig(
 today; an Authorization-header passthrough for authed providers is a small
 planned upstream to MMV's `VllmAdapter`.)
 
-## Not in v0.1 (descoped)
+## Shipped since the v0.1 slice
 
-- Shared/unified memory store and a unified provenance ontology → **v0.3**
-  (MMV and RQA keep their separate stores for now).
-- A generalized text-citation verifier for MMV answers (RQA's
-  `sanitize_memory_refs` is schema-coupled to RQA and runs inside RQA only).
+Both items originally descoped from v0.1 have since shipped:
+
+- **Unified memory store + provenance ontology** — `ero/unified_store.py`,
+  `ero/provenance.py`, `ero/store_readers.py` (see
+  [SPEC_v0_6_unification.md](SPEC_v0_6_unification.md); Phases 1–3 complete).
+- **Generalized output-time citation verifier** for MMV answers —
+  `ero/citation_verifier.py` (no longer RQA-internal).
 
 ## License
 
@@ -191,3 +200,4 @@ Part of the [MOBIUS](https://github.com/mobius-style) program — local-first, A
 - [rqa](https://github.com/mobius-style/rqa) — reflective questioning adapter: deepens *the question* when it is not
 - [rcgov](https://github.com/mobius-style/rcgov) — reflective context governor: governs *what a model may read*
 - [infinity](https://github.com/mobius-style/infinity) — composite capstone (MMV × RQA) with an OpenAI-compatible API
+- [tokyo-insight](https://github.com/mobius-style/tokyo-insight) — on-demand civic-RAG engine for 東京都議会 deliberation records (engine + facts only)

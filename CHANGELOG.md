@@ -1,7 +1,6 @@
 # Changelog — MOBIUS INFINITY / ERO
 
-Base model unified on **gemma4:12b** (Qwen shelved). Backups per version under
-`mobius_ai/MOBIUS_BACKUPS/mobius_infinity/`.
+Base model unified on **gemma4:12b** (Qwen shelved).
 
 ## v1.0.0-rc1 (2026-06-20) — product-grade hardening (release candidate)
 Brush-up pass toward a product-grade artifact. RC, not GA: the engineering bar is
