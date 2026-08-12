@@ -192,6 +192,18 @@ Composed dependencies (MMV, RQA) and attribution: [NOTICE](NOTICE). The
 underlying methods are patent pending (7 filings); the AGPL §11 grant and its
 scope: [PATENTS.md](PATENTS.md).
 
+### Commercial license
+
+If your organization cannot meet AGPL's source-disclosure obligations, a
+commercial license is available from MOBIUS LLC (sole rights holder):
+**USD 500 per month, per company — cancel anytime, no minimum term.**
+Annual invoicing available at USD 5,000/year.
+
+It is a license grant, not a service: no service is performed, no data of
+yours is accessed, and nothing you run depends on our availability.
+
+Contact: **info@mobius.style** — licensing questions are not handled in Issues.
+
 ## Related — the Möbius program
 
 Part of the [MOBIUS](https://github.com/mobius-style) program — local-first, AGPL:
